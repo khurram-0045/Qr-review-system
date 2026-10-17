@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { QRCodeSVG } from "qrcode.react";
+import { QRCodeCanvas } from "qrcode.react";
 import {
   getBusinesses,
   saveBusinesses,
@@ -712,14 +712,23 @@ function persist(items: Business[]): boolean {
               <div className="qr-layout">
                 <div className="qr-preview">
                   {qrUrl ? (
-                    <div id="business-qr" className="qr-white">
-                      <QRCodeSVG
-                        value={qrUrl}
-                        size={220}
-                        level="H"
-                        includeMargin
-                      />
-                    </div>
+                    
+<div id="business-qr" className="qr-white">
+  <QRCodeCanvas
+    value={qrUrl}
+    size={1200}
+    level="H"
+    marginSize={4}
+    bgColor="#FFFFFF"
+    fgColor="#000000"
+    style={{
+      display: "block",
+      width: "240px",
+      height: "240px",
+    }}
+  />
+</div>
+
                   ) : (
                     <div className="qr-placeholder">
                       The QR code is not ready.
@@ -746,13 +755,15 @@ function persist(items: Business[]): boolean {
                       Save Settings
                     </button>
 
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={downloadQr}
-                    >
-                      Download QR (SVG)
-                    </button>
+                    
+<button
+  type="button"
+  className="secondary-button"
+  onClick={downloadQr}
+>
+  Download QR (PNG)
+</button>
+
 
                     <button
                       type="button"
