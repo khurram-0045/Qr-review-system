@@ -32,7 +32,6 @@ function ReviewContent() {
 
   useEffect(() => {
     let found: Business | undefined;
-
     const config = searchParams.get("config");
 
     if (config) {
@@ -48,7 +47,7 @@ function ReviewContent() {
           found = parsed;
         }
       } catch {
-        // Try locally saved business settings.
+        // Fall back to locally saved settings.
       }
     }
 
@@ -58,7 +57,7 @@ function ReviewContent() {
           (item) => item.id === params.businessId
         );
       } catch {
-        // Show the unavailable state if loading fails.
+        // Show unavailable state if loading fails.
       }
     }
 
@@ -87,6 +86,7 @@ function ReviewContent() {
 
     setError("");
     setNotice("");
+    setShowFallback(false);
   }
 
   function clearAnswers() {
@@ -108,9 +108,9 @@ function ReviewContent() {
           `${category.name}: ${answers[category.id]}`
       );
 
-    let text = `My experience with ${business.name}: ${selected.join(
-      ". "
-    )}.`;
+    let text = selected.length
+      ? `My experience with ${business.name}: ${selected.join(". ")}.`
+      : `My experience with ${business.name}.`;
 
     if (comment.trim()) {
       text += ` Additional feedback: ${comment.trim()}`;
@@ -152,38 +152,66 @@ function ReviewContent() {
     setDraft(reviewDraft);
     setError("");
     setNotice("");
-    setSubmitting(true);
     setShowFallback(false);
+    setSubmitting(true);
 
+    // Open the tab immediately during the click, before awaiting
+    // clipboard access, to reduce popup-blocking issues.
     let destination: Window | null = null;
 
     try {
-      // Open the tab during the user's click to reduce popup blocking.
       destination = window.open("about:blank", "_blank");
-
-      await navigator.clipboard.writeText(reviewDraft);
-
-      if (destination) {
-        destination.location.href = reviewUrl.href;
-      }
-
-      setNotice(
-        destination
-          ? "Your feedback draft is copied. Paste it into the review page to submit it."
-          : "Your draft is copied. Open the review page below and paste it there."
-      );
     } catch {
-      if (destination && !destination.closed) {
-        destination.close();
-      }
+      destination = null;
+    }
 
+    let copied = false;
+
+    try {
+      if (
+        window.isSecureContext &&
+        navigator.clipboard?.writeText
+      ) {
+        await navigator.clipboard.writeText(reviewDraft);
+        copied = true;
+      }
+    } catch {
+      copied = false;
+    }
+
+    if (destination && !destination.closed) {
+      // A separate tab was opened successfully. Navigate it
+      // regardless of whether clipboard copying succeeded.
+      try {
+        destination.location.replace(reviewUrl.href);
+      } catch {
+        destination = null;
+      }
+    }
+
+    if (copied) {
+      setNotice(
+        "Your review text has been copied. Paste it into the review page and submit it."
+      );
+
+      if (!destination) {
+        // The browser blocked a new tab, so use the current tab.
+        setNotice(
+          "Your review text has been copied. Opening the review page..."
+        );
+        window.location.assign(reviewUrl.href);
+        return;
+      }
+    } else {
       setShowFallback(true);
       setNotice(
-        "Automatic copying was unavailable. Copy your draft below, then open the review page."
+        destination
+          ? "The review page has opened, but automatic copying failed. Copy the text below and paste it into the review page."
+          : "Automatic copying and opening a new tab were blocked. Copy your review below, then use the link to open the review page."
       );
-    } finally {
-      setSubmitting(false);
     }
+
+    setSubmitting(false);
   }
 
   const styles = {
@@ -387,24 +415,50 @@ function ReviewContent() {
               className="rb-copy-button"
               onClick={async () => {
                 try {
-                  await navigator.clipboard.writeText(draft);
-                  setNotice("Draft copied. Open the review page below.");
+                  if (
+                    window.isSecureContext &&
+                    navigator.clipboard?.writeText
+                  ) {
+                    await navigator.clipboard.writeText(draft);
+                    setNotice(
+                      "Review copied. Paste it into the review page."
+                    );
+                    return;
+                  }
+
+                  throw new Error("Clipboard unavailable");
                 } catch {
                   const field = document.getElementById(
                     "rb-draft"
                   ) as HTMLTextAreaElement | null;
 
-                  field?.focus();
-                  field?.select();
+                  if (field) {
+                    field.focus();
+                    field.select();
 
-                  setNotice(
-                    "Your draft is selected. Copy it, then open the review page."
-                  );
+                    const success =
+                      document.execCommand("copy");
+
+                    setNotice(
+                      success
+                        ? "Review copied. Paste it into the review page."
+                        : "Your review is selected. Copy it manually, then open the review page."
+                    );
+                  }
                 }
               }}
             >
               Copy feedback
             </button>
+
+            <a
+              className="rb-open-link"
+              href={business.reviewUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Open review page ↗
+            </a>
           </div>
         )}
 
@@ -415,12 +469,16 @@ function ReviewContent() {
           disabled={submitting}
         >
           <span>
-            {submitting ? "Preparing your feedback..." : "Continue to Review"}
+            {submitting
+              ? "Preparing your feedback..."
+              : "Continue to Review"}
           </span>
-          {!submitting && <span className="rb-submit-arrow">→</span>}
+          {!submitting && (
+            <span className="rb-submit-arrow">→</span>
+          )}
         </button>
 
-        {notice && (
+        {notice && !showFallback && (
           <a
             className="rb-open-link"
             href={business.reviewUrl}
