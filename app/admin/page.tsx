@@ -309,38 +309,50 @@ function persist(items: Business[]): boolean {
     updateBusiness({ categories });
   }
 
+  // Download the QR code as a high-resolution PNG.
   function downloadQr() {
     if (!business || !qrUrl) {
       setError("The QR code is not ready yet.");
       return;
     }
 
-    const svg = document.querySelector("#business-qr svg");
+    const canvas = document.querySelector("#business-qr canvas");
 
-    if (!(svg instanceof SVGElement)) {
-      setError("Could not find the QR code. Try refreshing the page.");
+    if (!(canvas instanceof HTMLCanvasElement)) {
+      setError("Could not find the QR code. Please refresh the page.");
       return;
     }
 
-    const clone = svg.cloneNode(true) as SVGElement;
-    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    try {
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          setError("Could not create the PNG file. Please try again.");
+          return;
+        }
 
-    const source = new XMLSerializer().serializeToString(clone);
-    const blob = new Blob([source], {
-      type: "image/svg+xml;charset=utf-8",
-    });
+        const safeName =
+          business.name
+            .trim()
+            .replace(/[^a-z0-9-_]+/gi, "-")
+            .replace(/^-+|-+$/g, "") || "business";
 
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
 
-    link.href = url;
-    link.download = `${business.name.replace(/[^a-z0-9-_]/gi, "-")}-qr.svg`;
+        link.href = url;
+        link.download = `${safeName}-qr.png`;
 
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
 
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+        window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+        setError("");
+      }, "image/png");
+    } catch (error) {
+      console.error("QR PNG download error:", error);
+      setError("Could not download the QR code. Please try again.");
+    }
   }
 
   function previewCustomer() {
